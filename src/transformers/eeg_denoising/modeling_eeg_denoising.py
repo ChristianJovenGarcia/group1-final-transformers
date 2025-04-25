@@ -1,7 +1,8 @@
 import torch
-from transformers import TimeSeriesTransformerModel, TimeSeriesTransformerPreTrainedModel
+from transformers import TimeSeriesTransformerModel, PreTrainedModel
+from .configuration_eeg_denoising import EEGDenoisingConfig
 
-class EEGDenoisingModel(TimeSeriesTransformerPreTrainedModel):
+class EEGDenoisingModel(PreTrainedModel):
     config_class = EEGDenoisingConfig
 
     def __init__(self, config):
@@ -11,5 +12,4 @@ class EEGDenoisingModel(TimeSeriesTransformerPreTrainedModel):
 
     def forward(self, noisy_eeg):
         outputs = self.transformer(noisy_eeg)
-        denoised = self.decoder(outputs.last_hidden_state)
-        return denoised
+        return self.decoder(outputs.last_hidden_state)

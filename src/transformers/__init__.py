@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 # Check the dependencies satisfy the minimal versions required.
 from . import dependency_versions_check
+from .models.eeg_denoising import EEGDenoisingConfig, EEGDenoisingModel, EEGDenoisingProcessor
 from .utils import (
     OptionalDependencyNotAvailable,
     _LazyModule,
