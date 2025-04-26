@@ -15,10 +15,11 @@ from typing import TYPE_CHECKING
 
 from ..utils import _LazyModule
 from ..utils.import_utils import define_import_structure
-
+    
+# src/transformers/models/__init__.py
+from . import eeg_denoising  # Register the module
 
 if TYPE_CHECKING:
-    from . import eeg_denoising  # Register your module
     from .albert import *
     from .align import *
     from .altclip import *
