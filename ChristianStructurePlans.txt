@@ -24,5 +24,124 @@ should work, but results in an error
 my advice is to discuss with the AI model, be sure to let it know about this file structure (above)
 - Christian
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~FROM DEEPSEEK~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Here's the big picture of what your EEG denoising code achieves and the key commands to make it work:
+What This Code Does
+
+    EEG Denoising:
+
+        Cleans noisy brainwave recordings (muscle artifacts, eye blinks, etc.) using a Transformer-based deep learning model.
+
+        Input: Raw multichannel EEG signals (e.g., from TUH EEG Corpus).
+
+        Output: Denoised signals ready for BCI tasks (seizure detection, motor imagery, etc.).
+
+    Key Features:
+
+        Built into HuggingFace Transformers for easy reuse.
+
+        Handles preprocessing (bandpass filtering, notch filtering).
+
+        Compatible with clinical/research EEG data (e.g., TUAR corpus). 
+
+Commands to Run
+1. Install & Set Up
+bash
+
+# Navigate to your transformers fork root (where setup.py is)
+cd /workspaces/transformers/
+
+# Install in editable mode
+pip uninstall transformers -y
+pip install -e .
+
+2. Train the Model
+bash
+
+# Run from the examples directory
+cd examples/research_projects/eeg_denoising/
+python train.py
+
+What Happens:
+
+    Loads TUH EEG data (you’ll need to download it).
+
+    Trains the denoising model (saves weights to eeg_denoiser.pth).
+
+3. Use the Pretrained Model
+python
+
+from transformers import EEGDenoisingModel, EEGDenoisingProcessor
+
+# Load pretrained model & processor
+model = EEGDenoisingModel.from_pretrained("your_model_path")
+processor = EEGDenoisingProcessor()
+
+# Denoise raw EEG (example)
+raw_eeg = ...  # Load your EDF file or numpy array
+clean_eeg = model(processor.process(raw_eeg))
+
+4. Evaluate & Visualize
+bash
+
+python evaluate.py
+
+Output:
+
+    Saves a plot (denoising_result.png) comparing raw vs. denoised signals.
+
+Example Workflow
+
+    Input: Noisy EEG segment from TUAR corpus.
+    python
+
+raw_eeg = load_edf("tuh_eeg/artifact_sample.edf")  # 64 channels, 256Hz
+
+Denoise:
+python
+
+clean_eeg = model(raw_eeg)  # Output shape: (64, 256)
+
+Downstream Task:
+python
+
+    classify(clean_eeg)  # e.g., seizure prediction
+
+Key Files & Their Roles
+File	Purpose
+modeling_eeg_denoising.py	Transformer model architecture.
+configuration_eeg_denoising.py	Defines model hyperparameters.
+processing_eeg_denoising.py	Handles filtering/normalization.
+train.py	Training script (uses TUH EEG data).
+evaluate.py	Tests model on new EEG samples.
+Expected Output
+
+    Training: Prints loss values per epoch.
+
+    Epoch 1: Loss = 0.124
+    Epoch 2: Loss = 0.089
+
+    Evaluation:
+    Denoising Comparison
+    (Left: Noisy EEG, Right: Cleaned)
+
+Troubleshooting
+
+If imports fail:
+bash
+
+# Check if editable install worked
+pip list | grep transformers  # Should show path to your Codespace
+
+Next Steps
+
+    Add Real Data: Replace placeholders with TUAR artifact annotations.
+
+    Deploy: Export to ONNX for real-time BCI use.
+
+Let me know if you’d like to adapt this for a specific EEG task!
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 ~~If you make changes or would like to note things, put it here so people can see it~~
 ~~Never forget to push your changes so that we can see them~~
