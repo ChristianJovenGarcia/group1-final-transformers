@@ -1,0 +1,28 @@
+This is the file structure we're using
+
+transformers/                       # Root of your forked repo
+│── src/
+│   └── transformers/
+│       ├── __init__.py             # Updated to include EEG denoising
+│       └── models/
+│           ├── eeg_denoising/      # Your module
+│           │   ├── __init__.py
+│           │   ├── configuration_eeg_denoising.py
+│           │   ├── modeling_eeg_denoising.py
+│           │   └── processing_eeg_denoising.py
+│           └── __init__.py         # Updated to include eeg_denoising
+│── examples/
+│   └── research_projects/
+│       └── eeg_denoising/
+│           ├── train.py            # Training script
+│           └── utils.py            # Data loading and preprocessing
+
+IMPORTANT
+Running
+python -c "from transformers import EEGDenoisingConfig; print(EEGDenoisingConfig())"
+should work, but results in an error
+my advice is to discuss with the AI model, be sure to let it know about this file structure (above)
+- Christian
+
+~~If you make changes or would like to note things, put it here so people can see it~~
+~~Never forget to push your changes so that we can see them~~
