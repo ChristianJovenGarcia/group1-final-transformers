@@ -114,9 +114,6 @@ class TimeSeriesStdScaler(nn.Module):
         scale = torch.sqrt(variance + self.minimum_scale)
         return (data - loc) / scale, loc, scale
 
-# Ensure observed_indicator has the same shape as data
-if observed_indicator.dim() == 2:
-    observed_indicator = observed_indicator.unsqueeze(-1)
 class TimeSeriesMeanScaler(nn.Module):
     """
     Computes a scaling factor as the weighted average absolute value along the first dimension, and scales the data
@@ -133,6 +130,9 @@ class TimeSeriesMeanScaler(nn.Module):
     def forward(
         self, data: torch.Tensor, observed_indicator: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # Ensure observed_indicator has the same shape as data
+        if observed_indicator.dim() == 2:
+            observed_indicator = observed_indicator.unsqueeze(-1)
         """
         Parameters:
             data (`torch.Tensor` of shape `(batch_size, sequence_length, num_input_channels)`):
