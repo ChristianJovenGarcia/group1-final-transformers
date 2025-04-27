@@ -1,9 +1,25 @@
-from transformers import EEGDenoisingConfig, EEGDenoisingModel
+from transformers.models.eeg_denoising.configuration_eeg_denoising import EEGDenoisingConfig
 from utils import TUARDataset
 from torch.utils.data import DataLoader, RandomSampler
+from transformers.models.eeg_denoising.modeling_eeg_denoising import EEGDenoisingModel
 import torch
+import os
+import numpy as np
+import mne
+from transformers import TimeSeriesTransformerModel, PreTrainedModel
+from transformers import logging
+logger = logging.get_logger(__name__)
 
-# Initialize the dataset
+
+# Define the configuration
+config = EEGDenoisingConfig(
+    context_length=128,  # Example value, adjust as needed
+    prediction_length=32,  # Example value, adjust as needed
+    num_channels=64,  # Example value, adjust as needed
+    input_size=64,  # Example value, adjust as needed
+    scaling="mean",  # Example value, adjust as needed
+)
+
 # Initialize the dataset
 dataset = TUARDataset(fixed_length=config.context_length + config.prediction_length)
 
@@ -37,11 +53,23 @@ for epoch in range(10):
         eeg_data, past_time_features, past_observed_mask = batch
 
         # Ensure past_observed_mask matches the shape of eeg_data
+        # Ensure past_observed_mask matches the shape of eeg_data
         if past_observed_mask.ndim == 2:
-            past_observed_mask = past_observed_mask.unsqueeze(-1)
+            past_observed_mask = past_observed_mask.unsqueeze(-1)  # Add a new dimension
 
-            # Forward pass
-            denoised = model(eeg_data, past_time_features, past_observed_mask)
+        if past_observed_mask.shape != eeg_data.shape:
+            past_observed_mask = past_observed_mask.expand_as(eeg_data)  # Expand to match eeg_data
+
+        # Debugging shapes
+        print(f"eeg_data shape: {eeg_data.shape}")
+        print(f"past_time_features shape: {past_time_features.shape}")
+        print(f"past_observed_mask shape: {past_observed_mask.shape}")
+
+        # Forward pass
+        denoised = model(eeg_data, past_time_features, past_observed_mask)
+
+        # Forward pass
+        denoised = model(eeg_data, past_time_features, past_observed_mask)
 
         if 'clean_eeg' in locals() or 'clean_eeg' in globals():
             # Use clean EEG data as the target if available

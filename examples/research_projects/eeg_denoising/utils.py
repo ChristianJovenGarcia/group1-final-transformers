@@ -28,7 +28,7 @@ class TUARDataset:
         raw = mne.io.read_raw_edf(file_path, preload=True)
         data = raw.get_data()  # Get the EEG data as a numpy array
 
-        # Pad or truncate the data to the fixed length
+    # Pad or truncate the data to the fixed length
         if data.shape[1] < self.fixed_length:
             padded_data = np.zeros((data.shape[0], self.fixed_length))
             padded_data[:, :data.shape[1]] = data
@@ -36,9 +36,12 @@ class TUARDataset:
         elif data.shape[1] > self.fixed_length:
             data = data[:, :self.fixed_length]
 
-        # Generate dummy past_time_features and past_observed_mask
-        # Generate dummy past_time_features with the correct shape
+    # Generate dummy past_time_features and past_observed_mask
         past_time_features = np.zeros((self.fixed_length, 1))  # Example: all zeros
         past_observed_mask = np.ones((data.shape[0], self.fixed_length))  # Example: all ones
 
+    # Ensure past_observed_mask matches the shape of data
+        past_observed_mask = past_observed_mask[:data.shape[0], :data.shape[1]]
+
         return data, past_time_features, past_observed_mask
+        
