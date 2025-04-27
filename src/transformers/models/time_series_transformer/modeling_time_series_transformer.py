@@ -114,7 +114,9 @@ class TimeSeriesStdScaler(nn.Module):
         scale = torch.sqrt(variance + self.minimum_scale)
         return (data - loc) / scale, loc, scale
 
-
+# Ensure observed_indicator has the same shape as data
+if observed_indicator.dim() == 2:
+    observed_indicator = observed_indicator.unsqueeze(-1)
 class TimeSeriesMeanScaler(nn.Module):
     """
     Computes a scaling factor as the weighted average absolute value along the first dimension, and scales the data
@@ -1178,6 +1180,10 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
     def __init__(self, config: TimeSeriesTransformerConfig):
         super().__init__(config)
 
+        # Ensure lags_sequence is defined in the config
+        if not hasattr(config, "lags_sequence") or not config.lags_sequence:
+            config.lags_sequence = [1, 2, 3, 4, 5, 6, 7]  # Default lags_sequence
+
         if config.scaling == "mean" or config.scaling is True:
             self.scaler = TimeSeriesMeanScaler(config)
         elif config.scaling == "std":
@@ -1191,7 +1197,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
                 embedding_dims=config.embedding_dimension,
             )
 
-        # transformer encoder-decoder and mask initializer
+        # Transformer encoder-decoder and mask initializer
         self.encoder = TimeSeriesTransformerEncoder(config)
         self.decoder = TimeSeriesTransformerDecoder(config)
 
@@ -1200,39 +1206,10 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
 
     @property
     def _past_length(self) -> int:
+        # Ensure lags_sequence is valid
+        if not hasattr(self.config, "lags_sequence") or not self.config.lags_sequence:
+            raise ValueError("The `lags_sequence` must be defined in the configuration.")
         return self.config.context_length + max(self.config.lags_sequence)
-
-    def get_lagged_subsequences(
-        self, sequence: torch.Tensor, subsequences_length: int, shift: int = 0
-    ) -> torch.Tensor:
-        """
-        Returns lagged subsequences of a given sequence. Returns a tensor of shape (N, S, C, I),
-            where S = subsequences_length and I = len(indices), containing lagged subsequences. Specifically, lagged[i,
-            j, :, k] = sequence[i, -indices[k]-S+j, :].
-
-        Args:
-            sequence: Tensor
-                The sequence from which lagged subsequences should be extracted. Shape: (N, T, C).
-            subsequences_length : int
-                Length of the subsequences to be extracted.
-            shift: int
-                Shift the lags by this amount back.
-        """
-        sequence_length = sequence.shape[1]
-        indices = [lag - shift for lag in self.config.lags_sequence]
-
-        if max(indices) + subsequences_length > sequence_length:
-            raise ValueError(
-                f"lags cannot go further than history length, found lag {max(indices)} "
-                f"while history length is only {sequence_length}"
-            )
-
-        lagged_values = []
-        for lag_index in indices:
-            begin_index = -lag_index - subsequences_length
-            end_index = -lag_index if lag_index > 0 else None
-            lagged_values.append(sequence[:, begin_index:end_index, ...])
-        return torch.stack(lagged_values, dim=-1)
 
     def create_network_inputs(
         self,
@@ -1256,6 +1233,9 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             if future_values is not None
             else past_time_features[:, self._past_length - self.config.context_length :, ...]
         )
+
+        # Debugging: Print time_feat shape
+        print(f"time_feat shape: {time_feat.shape}")
 
         # target
         if past_observed_mask is None:
@@ -1283,8 +1263,15 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             static_feat = torch.cat((embedded_cat, static_feat), dim=1)
         expanded_static_feat = static_feat.unsqueeze(1).expand(-1, time_feat.shape[1], -1)
 
+        # Debugging: Print static_feat and expanded_static_feat shapes
+        print(f"static_feat shape: {static_feat.shape}")
+        print(f"expanded_static_feat shape: {expanded_static_feat.shape}")
+
         # all features
         features = torch.cat((expanded_static_feat, time_feat), dim=-1)
+
+        # Debugging: Print features shape
+        print(f"features shape: {features.shape}")
 
         # lagged features
         subsequences_length = (
@@ -1293,24 +1280,28 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             else self.config.context_length
         )
         lagged_sequence = self.get_lagged_subsequences(sequence=inputs, subsequences_length=subsequences_length)
+
+        # Debugging: Print lagged_sequence shape
+        print(f"lagged_sequence shape: {lagged_sequence.shape}")
+
         lags_shape = lagged_sequence.shape
         reshaped_lagged_sequence = lagged_sequence.reshape(lags_shape[0], lags_shape[1], -1)
 
+        # Debugging: Print reshaped_lagged_sequence shape
+        print(f"reshaped_lagged_sequence shape: {reshaped_lagged_sequence.shape}")
+
         if reshaped_lagged_sequence.shape[1] != time_feat.shape[1]:
             raise ValueError(
-                f"input length {reshaped_lagged_sequence.shape[1]} and time feature lengths {time_feat.shape[1]} does not match"
+                f"input length {reshaped_lagged_sequence.shape[1]} and time feature lengths {time_feat.shape[1]} do not match"
             )
 
         # transformer inputs
         transformer_inputs = torch.cat((reshaped_lagged_sequence, features), dim=-1)
 
+        # Debugging: Print transformer_inputs shape
+        print(f"transformer_inputs shape: {transformer_inputs.shape}")
+
         return transformer_inputs, loc, scale, static_feat
-
-    def get_encoder(self):
-        return self.encoder
-
-    def get_decoder(self):
-        return self.decoder
 
     @add_start_docstrings_to_model_forward(TIME_SERIES_TRANSFORMER_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=Seq2SeqTSModelOutput, config_class=_CONFIG_FOR_DOC)

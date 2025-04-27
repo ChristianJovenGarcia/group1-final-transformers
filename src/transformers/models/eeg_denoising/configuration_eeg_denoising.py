@@ -8,6 +8,10 @@ class EEGDenoisingConfig(PretrainedConfig):
 
     def __init__(self, **kwargs):
         # Explicitly defined attributes with default values
+        self.scaling_dim = kwargs.pop("scaling_dim", 1)
+        self.keepdim = kwargs.pop("keepdim", True)
+        self.minimum_scale = kwargs.pop("minimum_scale", 1e-10)
+        self.default_scale = kwargs.pop("default_scale", None)
         self.num_channels = kwargs.pop("num_channels", 64)
         self.window_size = kwargs.pop("window_size", 256)
         self.hidden_size = kwargs.pop("hidden_size", 128)
@@ -66,6 +70,10 @@ class EEGDenoisingConfig(PretrainedConfig):
         self.pruned_heads = kwargs.pop("pruned_heads", {})
         self.task_specific_params = kwargs.pop("task_specific_params", {})
         self.gradient_checkpointing = kwargs.pop("gradient_checkpointing", False)
+        self.lags_sequence = kwargs.pop("lags_sequence", [1, 2, 3, 4, 5, 6, 7])  # Default lags
+        self.distribution_output = kwargs.pop("distribution_output", "normal")  # Default distribution
+        self.loss = kwargs.pop("loss", "nll")  # Default loss
+        self.num_parallel_samples = kwargs.pop("num_parallel_samples", 100)  # Default for sampling
 
         # Dynamically set any additional attributes passed via kwargs
         for key, value in kwargs.items():

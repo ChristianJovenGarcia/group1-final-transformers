@@ -21,7 +21,7 @@ IMPORTANT
 Running
 python -c "from transformers import EEGDenoisingConfig; print(EEGDenoisingConfig())"
 should work, but results in an error
-my advice is to discuss with the AI model, be sure to let it know about this file structure (above)
+THIS ISSUE HAVE BEEN RESOLVED
 - Christian
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~FROM DEEPSEEK~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
