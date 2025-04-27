@@ -24,7 +24,9 @@ import numpy as np
 from tokenizers import Tokenizer, decoders, normalizers, pre_tokenizers, processors
 from tokenizers.models import BPE, Unigram
 
-from .. import AddedToken
+def some_function_that_uses_added_token():
+    from .. import AddedToken  # Local import to avoid circular dependency
+    # Use AddedToken here
 from ..convert_slow_tokenizer import GemmaConverter, GPT2Converter, LlamaConverter, Qwen2Converter, T5Converter
 from ..utils import logging
 from ..utils.logging import tqdm

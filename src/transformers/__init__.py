@@ -26,7 +26,39 @@ from typing import TYPE_CHECKING
 # Check the dependencies satisfy the minimal versions required.
 from . import dependency_versions_check
 # src/transformers/__init__.py
-from .models.eeg_denoising import EEGDenoisingConfig, EEGDenoisingModel, EEGDenoisingProcessor
+# Delay the import to avoid circular dependency
+EEGDenoisingConfig = None
+EEGDenoisingModel = None
+EEGDenoisingProcessor = None
+
+def _lazy_import_eeg_denoising():
+    global EEGDenoisingConfig, EEGDenoisingModel, EEGDenoisingProcessor
+    from .models.eeg_denoising import EEGDenoisingConfig, EEGDenoisingModel, EEGDenoisingProcessor
+    return EEGDenoisingConfig, EEGDenoisingModel, EEGDenoisingProcessor
+
+# Add properties to dynamically load the EEGDenoising components
+@property
+def EEGDenoisingConfig():
+    global EEGDenoisingConfig
+    if EEGDenoisingConfig is None:
+        _lazy_import_eeg_denoising()
+    return EEGDenoisingConfig
+
+@property
+def EEGDenoisingModel():
+    global EEGDenoisingModel
+    if EEGDenoisingModel is None:
+        _lazy_import_eeg_denoising()
+    return EEGDenoisingModel
+
+@property
+def EEGDenoisingProcessor():
+    global EEGDenoisingProcessor
+    if EEGDenoisingProcessor is None:
+        _lazy_import_eeg_denoising()
+    return EEGDenoisingProcessor
+
+
 from .utils import (
     OptionalDependencyNotAvailable,
     _LazyModule,
@@ -50,6 +82,12 @@ from .utils import (
     is_vision_available,
     logging,
 )
+from .utils.import_utils import _LazyModule, OptionalDependencyNotAvailable
+
+
+
+
+
 from .utils.import_utils import define_import_structure
 
 
@@ -278,7 +316,23 @@ _import_structure = {
         "TorchAoConfig",
         "VptqConfig",
     ],
+    "models.eeg_denoising": [
+        "EEGDenoisingConfig",
+        "EEGDenoisingModel",
+        "EEGDenoisingProcessor",
+    ],
 }
+
+# Dynamically load modules using `_LazyModule`
+import sys
+from pathlib import Path
+
+sys.modules[__name__] = _LazyModule(
+    __name__,
+    Path(__file__).parent / "models",
+    _import_structure,
+    module_spec=__spec__,
+)
 
 # tokenizers-backed objects
 try:
