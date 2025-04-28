@@ -7,6 +7,13 @@ class EEGDenoisingConfig(PretrainedConfig):
     model_type = "eeg_denoising"
 
     def __init__(self, **kwargs):
+        # Set default hidden size to 57
+        self.hidden_size = kwargs.pop("hidden_size", 57)
+        self.d_model = self.hidden_size  # Ensure d_model matches hidden_size
+        self.encoder_ffn_dim = kwargs.pop("encoder_ffn_dim", self.hidden_size * 4)  # Adjust feed-forward size
+        self.decoder_ffn_dim = kwargs.pop("decoder_ffn_dim", self.hidden_size * 4)
+        self.num_attention_heads = kwargs.pop("num_attention_heads", 8)  # Ensure divisibility by hidden_size
+
         # Dynamically set attributes passed via kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -24,13 +31,9 @@ class EEGDenoisingConfig(PretrainedConfig):
         self.num_channels = kwargs.pop("num_channels", 64)
         self.window_size = kwargs.pop("window_size", 256)
         self.use_spectral_attention = kwargs.pop("use_spectral_attention", False)  # Add this line
-        self.hidden_size = kwargs.pop("hidden_size", 128)
         self.num_hidden_layers = kwargs.pop("num_hidden_layers", 4)
-        self.num_attention_heads = kwargs.pop("num_attention_heads", 8)
         self.encoder_attention_heads = kwargs.pop("encoder_attention_heads", 8)
         self.decoder_attention_heads = kwargs.pop("decoder_attention_heads", 8)
-        self.encoder_ffn_dim = kwargs.pop("encoder_ffn_dim", 512)
-        self.decoder_ffn_dim = kwargs.pop("decoder_ffn_dim", 512)  # Add decoder_ffn_dim explicitly
         self.decoder_layers = kwargs.pop("decoder_layers", 4)
         self.scaling = kwargs.pop("scaling", "mean")
         self.num_static_categorical_features = kwargs.pop("num_static_categorical_features", 0)
@@ -49,7 +52,6 @@ class EEGDenoisingConfig(PretrainedConfig):
         self.output_size = kwargs.pop("output_size", 1)
         self.num_decoder_layers = kwargs.pop("num_decoder_layers", 4)
         self.feature_size = kwargs.pop("feature_size", 64)
-        self.d_model = kwargs.pop("d_model", 128)
         self.encoder_layers = kwargs.pop("encoder_layers", 4)
         self.vocab_size = kwargs.pop("vocab_size", None)
         self.output_hidden_states = kwargs.pop("output_hidden_states", False)

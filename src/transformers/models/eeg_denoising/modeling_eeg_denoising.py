@@ -6,28 +6,19 @@ from .configuration_eeg_denoising import EEGDenoisingConfig
 class EEGDenoisingModel(PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        
-        # Ensure init_std is set in the configuration
-        if not hasattr(config, "init_std"):
-            config.init_std = 0.02  # Default value
 
-        # Initialize TimeSeriesTransformer backbone
+        # Initialize the transformer
         self.transformer = TimeSeriesTransformerModel(config)
         
-        # EEG-specific processing layers
-        self.input_projection = nn.Linear(config.num_channels, config.d_model)
-        self.decoder = nn.Sequential(
-            nn.Linear(config.d_model, config.d_model),
-            nn.GELU(),
-            nn.Linear(config.d_model, config.num_channels)
-        )
+        # Input projection
+        self.input_projection = nn.Linear(128, 128)  # 128 -> 128
         
-        # Optional spectral attention layer
-        if config.use_spectral_attention:
-            self.spectral_attention = SpectralAttentionLayer(
-                num_channels=config.num_channels,
-                seq_len=config.context_length
-            )
+        # Decoder for output
+        self.decoder = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),  # 128 -> 128
+            nn.GELU(),
+            nn.Linear(config.hidden_size, config.num_channels)  # 128 -> 64
+        )
         
         # Initialize weights
         self.apply(self._init_weights)
@@ -47,58 +38,16 @@ class EEGDenoisingModel(PreTrainedModel):
             nn.init.constant_(module.bias, 0)
             nn.init.constant_(module.weight, 1.0)
 
-    def forward(self, noisy_eeg, past_time_features=None, past_observed_mask=None):
-        """
-        Args:
-            noisy_eeg: (batch_size, num_channels, sequence_length)
-            past_time_features: Optional time features
-            past_observed_mask: Optional mask for observed values
-
-        Returns:
-            denoised_eeg: (batch_size, num_channels, sequence_length)
-        """
-        # Validate input shapes
-        assert noisy_eeg.ndim == 3, f"Expected noisy_eeg to have 3 dimensions, got {noisy_eeg.ndim}"
-        if past_time_features is not None:
-            assert past_time_features.ndim == 3, f"Expected past_time_features to have 3 dimensions, got {past_time_features.ndim}"
-        if past_observed_mask is not None:
-            assert past_observed_mask.ndim in [2, 3], f"Expected past_observed_mask to have 2 or 3 dimensions, got {past_observed_mask.ndim}"
-
-        # Align past_observed_mask shape
-        if past_observed_mask is not None:
-            if past_observed_mask.ndim == 2:
-                past_observed_mask = past_observed_mask.unsqueeze(-1)  # Add a channel dimension
-            if past_observed_mask.shape[1] != noisy_eeg.shape[2]:
-                # Dynamically align sequence length
-                if past_observed_mask.shape[1] < noisy_eeg.shape[2]:
-                    padding = noisy_eeg.shape[2] - past_observed_mask.shape[1]
-                    past_observed_mask = torch.nn.functional.pad(past_observed_mask, (0, 0, 0, padding))
-                elif past_observed_mask.shape[1] > noisy_eeg.shape[2]:
-                    past_observed_mask = past_observed_mask[:, :noisy_eeg.shape[2], :]
-            if past_observed_mask.shape[0] != noisy_eeg.shape[0]:
-                raise ValueError(
-                    f"Mismatch in batch size: past_observed_mask.shape[0] ({past_observed_mask.shape[0]}) "
-                    f"!= noisy_eeg.shape[0] ({noisy_eeg.shape[0]})"
-                )
-
-        # Permute noisy_eeg to match the expected input shape for input_projection
-        noisy_eeg = noisy_eeg.permute(0, 2, 1)  # Shape: [batch_size, sequence_length, num_channels]
-
-        # Project noisy_eeg to the model's input dimension
-        past_values = self.input_projection(noisy_eeg)  # Shape: [batch_size, sequence_length, d_model]
-
-        # Pass inputs to the transformer
-        transformer_output = self.transformer(
-            past_values=past_values,
-            past_time_features=past_time_features,
-            past_observed_mask=past_observed_mask
+    def forward(self, transformer_inputs):
+        # transformer_inputs: [batch, seq_len, 128]
+        # Do NOT permute or transpose here!
+        projected_inputs = self.input_projection(transformer_inputs)
+        transformer_outputs = self.transformer(
+            inputs_embeds=projected_inputs,
+            return_dict=True
         )
-
-        # Decode the output
-        denoised_eeg = self.decoder(transformer_output.last_hidden_state)  # Shape: [batch_size, sequence_length, num_channels]
-
-        # Permute the output back to the original shape
-        denoised_eeg = denoised_eeg.permute(0, 2, 1)  # Shape: [batch_size, num_channels, sequence_length]
+        sequence_output = transformer_outputs.last_hidden_state
+        denoised_eeg = self.decoder(sequence_output)
         return denoised_eeg
 
 class SpectralAttentionLayer(nn.Module):
@@ -174,7 +123,7 @@ if __name__ == "__main__":
     # Example usage
     config = EEGDenoisingConfig(
         num_channels=19,
-        d_model=128,
+        d_model=64,
         context_length=256,
         use_spectral_attention=True
     )

@@ -38,6 +38,7 @@ for idx in range(len(dataset)):
 
     # Skip files that failed to process
     if eeg_data is None or past_time_features is None or past_observed_mask is None:
+        print(f"Skipping file at index {idx} due to loading error.")
         continue
 
     # Pass the data to the model
@@ -62,13 +63,16 @@ data_loader = DataLoader(dataset, sampler=sampler, batch_size=32)
 
 # Initialize the model configuration
 config = EEGDenoisingConfig(
+    context_length=128,
+    prediction_length=32,
     num_channels=64,
-    input_size=64,
-    window_size=256,
-    hidden_size=128,
+    input_size=128,      # <--- CHANGE THIS TO 128
+    feature_size=128,    # <--- CHANGE THIS TO 128
+    hidden_size=128,     # <--- CHANGE THIS TO 128
     num_hidden_layers=4,
     num_attention_heads=8,
     scaling="mean",
+    d_model=128          # <--- CHANGE THIS TO 128 if used
 )
 
 # Initialize the model
@@ -77,6 +81,7 @@ model = EEGDenoisingModel(config)
 # Train
 optimizer = torch.optim.Adam(model.parameters())
 for epoch in range(10):
+    loss = None  # Initialize loss as None at the start of each epoch
     for batch in data_loader:
         optimizer.zero_grad()
 
@@ -86,13 +91,21 @@ for epoch in range(10):
         eeg_data = eeg_data.float()
         past_time_features = past_time_features.float()
         past_observed_mask = past_observed_mask.float()
-        # Ensure past_observed_mask matches the shape of eeg_data
-        # Ensure past_observed_mask matches the shape of eeg_data
-        if past_observed_mask.ndim == 2:
-            past_observed_mask = past_observed_mask.unsqueeze(-1)  # Add a new dimension
 
+        # Ensure past_observed_mask matches the shape of eeg_data
+        min_seq_len = min(eeg_data.shape[2], past_observed_mask.shape[1])
+
+        # Truncate both tensors to the minimum sequence length
+        eeg_data = eeg_data[:, :, :min_seq_len]
+        past_observed_mask = past_observed_mask[:, :min_seq_len, :]
+
+        # Check for shape mismatches and skip if they occur
         if past_observed_mask.shape != eeg_data.shape:
-            past_observed_mask = past_observed_mask.expand_as(eeg_data)  # Expand to match eeg_data
+            print(
+                f"Skipping batch due to shape mismatch: eeg_data shape {eeg_data.shape}, "
+                f"past_observed_mask shape {past_observed_mask.shape}"
+            )
+            continue
 
         # Debugging shapes
         print(f"eeg_data shape: {eeg_data.shape}")
@@ -100,20 +113,31 @@ for epoch in range(10):
         print(f"past_observed_mask shape: {past_observed_mask.shape}")
 
         # Forward pass
-        denoised = model(eeg_data, past_time_features, past_observed_mask)
+        try:
+            denoised = model(eeg_data, past_time_features, past_observed_mask)
 
-        # Forward pass
-        denoised = model(eeg_data, past_time_features, past_observed_mask)
+            if 'clean_eeg' in locals() or 'clean_eeg' in globals():
+                # Use clean EEG data as the target if available
+                loss = torch.nn.functional.mse_loss(denoised, clean_eeg)
+            else:
+                # Fall back to using noisy EEG data as the target
+                loss = torch.nn.functional.mse_loss(denoised, eeg_data)
 
-        if 'clean_eeg' in locals() or 'clean_eeg' in globals():
-            # Use clean EEG data as the target if available
-            loss = torch.nn.functional.mse_loss(denoised, clean_eeg)
-        else:
-            # Fall back to using noisy EEG data as the target
-            loss = torch.nn.functional.mse_loss(denoised, eeg_data)
+            # Backpropagation and optimization step
+            loss.backward()
+            optimizer.step()
 
-        # Backpropagation and optimization step
-        loss.backward()
-        optimizer.step()
+        except Exception as e:
+            print(f"Error during forward pass or optimization: {e}")
+            continue
 
-    print(f"Epoch {epoch}: Loss = {loss.item()}")
+    # Print loss if it was calculated, otherwise indicate the epoch was skipped
+    if loss is not None:
+        print(f"Epoch {epoch}: Loss = {loss.item()}")
+    else:
+        print(f"Epoch {epoch}: No valid batches processed, skipping.")
+
+# Save the model after training
+model_save_path = "/workspaces/group1-final-transformers/model_checkpoint.pth"
+torch.save(model.state_dict(), model_save_path)
+print(f"Model saved to {model_save_path}")

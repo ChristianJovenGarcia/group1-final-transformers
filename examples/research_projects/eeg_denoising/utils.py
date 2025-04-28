@@ -4,26 +4,20 @@ import numpy as np
 import torch
 
 class TUARDataset:
-    def __init__(self, data_dir=None, fixed_length=20000, max_files=50):
-        self.data_dir = data_dir or "/workspaces/group1-final-transformers/examples/research_projects/eeg_denoising/data"  # Default path
+    def __init__(self, data_dir=None, fixed_length=57, max_files=50):  # Set fixed_length to 57
+        self.data_dir = data_dir
         self.fixed_length = fixed_length
-        self.max_files = max_files  # Maximum number of files to process
+        self.max_files = max_files
+        self.files = self._load_files()
 
-        if not os.path.exists(self.data_dir):
-            raise ValueError(f"Dataset directory does not exist: {self.data_dir}")
-
-        # Recursively find all .edf files in the directory and subdirectories
-        self.files = []
+    def _load_files(self):
+        # Load all .edf files from the data directory
+        edf_files = []
         for root, _, files in os.walk(self.data_dir):
             for file in files:
                 if file.endswith(".edf"):
-                    self.files.append(os.path.join(root, file))
-
-        if len(self.files) == 0:
-            raise ValueError(f"No .edf files found in dataset directory: {self.data_dir}")
-
-        # Limit the number of files to process
-        self.files = self.files[:self.max_files]
+                    edf_files.append(os.path.join(root, file))
+        return edf_files[:self.max_files]
 
     def __len__(self):
         return len(self.files)
@@ -31,33 +25,37 @@ class TUARDataset:
     def __getitem__(self, idx):
         file_path = self.files[idx]
         try:
-            # Load the .edf file corresponding to the given index
+            # Load the .edf file
             raw = mne.io.read_raw_edf(file_path, preload=True)
-            data, _ = raw[:, :]  # Extract data and ignore times
+            eeg_data, _ = raw[:, :]  # Extract data and ignore times
 
-            # Pad or truncate the data to the fixed length
-            if data.shape[1] < self.fixed_length:
-                padded_data = np.zeros((data.shape[0], self.fixed_length))
-                padded_data[:, :data.shape[1]] = data
-                data = padded_data
-            elif data.shape[1] > self.fixed_length:
-                data = data[:, :self.fixed_length]
+            # Truncate or pad data to fixed_length
+            if eeg_data.shape[1] > self.fixed_length:
+                eeg_data = eeg_data[:, :self.fixed_length]
+            elif eeg_data.shape[1] < self.fixed_length:
+                padding = self.fixed_length - eeg_data.shape[1]
+                eeg_data = np.pad(eeg_data, ((0, 0), (0, padding)), mode="constant")
 
-            # Generate dummy past_time_features and past_observed_mask
-            past_time_features = np.zeros((self.fixed_length, 1))  # Example: all zeros
-            past_observed_mask = np.ones((data.shape[0], self.fixed_length))  # Example: all ones
+            # Generate past_observed_mask with the same sequence length as eeg_data
+            past_observed_mask = np.ones((eeg_data.shape[0], eeg_data.shape[1]), dtype=np.float32)
 
-            # Ensure past_observed_mask matches the shape of data
-            past_observed_mask = past_observed_mask[:data.shape[0], :data.shape[1]]
+            # Generate past_time_features (time_feat)
+            time_feat = np.linspace(0, 1, eeg_data.shape[1])  # Ensure it matches the sequence length
+            time_feat = np.tile(time_feat, (eeg_data.shape[0], 1))  # Repeat for each channel
 
-            # Convert to PyTorch tensors
-            data = torch.tensor(data, dtype=torch.float32)
-            past_time_features = torch.tensor(past_time_features, dtype=torch.float32)
-            past_observed_mask = torch.tensor(past_observed_mask, dtype=torch.float32)
+            # Ensure shapes match
+            assert eeg_data.shape == past_observed_mask.shape == time_feat.shape, (
+                f"Shape mismatch: eeg_data shape {eeg_data.shape}, "
+                f"past_observed_mask shape {past_observed_mask.shape}, "
+                f"time_feat shape {time_feat.shape}"
+            )
 
-            return data, past_time_features, past_observed_mask
-
+            # Return tensors
+            return (
+                torch.tensor(eeg_data, dtype=torch.float32),
+                torch.tensor(time_feat, dtype=torch.float32),
+                torch.tensor(past_observed_mask, dtype=torch.float32),
+            )
         except Exception as e:
-            # Log the error and skip the file
-            print(f"Error processing file {file_path}: {e}")
+            print(f"Error loading file {file_path}: {e}")
             return None, None, None
