@@ -7,6 +7,15 @@ class EEGDenoisingConfig(PretrainedConfig):
     model_type = "eeg_denoising"
 
     def __init__(self, **kwargs):
+        # Dynamically set attributes passed via kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        # Fallback mechanism for missing attributes
+        self._set_default_attributes()
+
+        super().__init__(**kwargs)
+
         # Explicitly defined attributes with default values
         self.scaling_dim = kwargs.pop("scaling_dim", 1)
         self.keepdim = kwargs.pop("keepdim", True)
@@ -14,6 +23,7 @@ class EEGDenoisingConfig(PretrainedConfig):
         self.default_scale = kwargs.pop("default_scale", None)
         self.num_channels = kwargs.pop("num_channels", 64)
         self.window_size = kwargs.pop("window_size", 256)
+        self.use_spectral_attention = kwargs.pop("use_spectral_attention", False)  # Add this line
         self.hidden_size = kwargs.pop("hidden_size", 128)
         self.num_hidden_layers = kwargs.pop("num_hidden_layers", 4)
         self.num_attention_heads = kwargs.pop("num_attention_heads", 8)
@@ -84,25 +94,34 @@ class EEGDenoisingConfig(PretrainedConfig):
 
         super().__init__(**kwargs)
 
-    def _set_default_attributes(self):
+    def __getattr__(self, name):
         """
-        Set default values for attributes that might be required but are not explicitly defined or passed.
+        Fallback for undefined attributes. Returns `None` for missing attributes.
         """
-        default_attributes = {
-            "init_std": 0.02,  # Example default value for init_std
-            "decoder_layers": 4,  # Default value for decoder_layers
-            "decoder_attention_heads": 8,  # Default value for decoder_attention_heads
-            "decoder_ffn_dim": 512,  # Default value for decoder_ffn_dim
-            # Add other default attributes here as needed
-        }
-        for key, value in default_attributes.items():
-            if not hasattr(self, key):
-                setattr(self, key, value)
+        # Log a warning for missing attributes (optional)
+        if logger.isEnabledFor(logging.DEBUG):  # Log only in debug mode
+            logger.warning(f"Attribute '{name}' is not explicitly defined. Returning None.")
+        return None
 
     def to_dict(self):
         config_dict = super().to_dict()
         config_dict.update(self.__dict__)  # Include all dynamically added attributes
         return config_dict
+
+    def _set_default_attributes(self):
+        """
+        Set default values for attributes that might be required but are not explicitly defined or passed.
+        """
+        default_attributes = {
+            "init_std": 0.02,  # Default value for init_std
+            "decoder_layers": 4,
+            "decoder_attention_heads": 8,
+            "decoder_ffn_dim": 512,
+            # Add other default attributes here as needed
+        }
+        for key, value in default_attributes.items():
+            if not hasattr(self, key):
+                setattr(self, key, value)
 
     @classmethod
     def from_dict(cls, config_dict):

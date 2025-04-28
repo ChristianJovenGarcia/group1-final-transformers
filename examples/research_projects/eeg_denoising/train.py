@@ -20,8 +20,39 @@ config = EEGDenoisingConfig(
     scaling="mean",  # Example value, adjust as needed
 )
 
-# Initialize the dataset
-dataset = TUARDataset(fixed_length=config.context_length + config.prediction_length)
+# Replace "/path/to/data" with the actual path to your dataset
+dataset_path = "/workspaces/group1-final-transformers/examples/research_projects/eeg_denoising/data/physionet.org/files/eegmmidb/1.0.0/"
+
+# Check if the dataset directory exists
+if not os.path.exists(dataset_path):
+    print(f"Error: Dataset directory does not exist: {dataset_path}")
+    exit(1)
+
+# Initialize the dataset with a maximum of 50 files
+dataset = TUARDataset(data_dir=dataset_path, fixed_length=20000, max_files=50)
+
+# Process the dataset
+processed_count = 0
+for idx in range(len(dataset)):
+    eeg_data, past_time_features, past_observed_mask = dataset[idx]
+
+    # Skip files that failed to process
+    if eeg_data is None or past_time_features is None or past_observed_mask is None:
+        continue
+
+    # Pass the data to the model
+    try:
+        denoised = model(eeg_data, past_time_features, past_observed_mask)
+        processed_count += 1
+
+        # Stop processing after 40-50 files
+        if processed_count >= 50:
+            print("Processed the maximum number of files. Stopping.")
+            break
+
+    except Exception as e:
+        print(f"Error during model processing for file {idx}: {e}")
+        continue
 
 # Use a sampler with the correct number of samples
 sampler = RandomSampler(dataset, replacement=True, num_samples=len(dataset))
@@ -51,7 +82,10 @@ for epoch in range(10):
 
         # Unpack the batch
         eeg_data, past_time_features, past_observed_mask = batch
-
+        # Ensure dataset tensors are float32
+        eeg_data = eeg_data.float()
+        past_time_features = past_time_features.float()
+        past_observed_mask = past_observed_mask.float()
         # Ensure past_observed_mask matches the shape of eeg_data
         # Ensure past_observed_mask matches the shape of eeg_data
         if past_observed_mask.ndim == 2:
