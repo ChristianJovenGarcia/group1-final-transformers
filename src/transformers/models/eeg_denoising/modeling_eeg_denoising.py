@@ -14,11 +14,10 @@ class EEGDenoisingModel(PreTrainedModel):
         self.input_projection = nn.Linear(128, 128)  # 128 -> 128
         
         # Decoder for output
-        # Fix: decoder input dim should match transformer output last dim (128), output dim = num_channels (64)
         self.decoder = nn.Sequential(
-            nn.Linear(128, 128),  # 128 -> 128
+            nn.Linear(config.hidden_size, config.hidden_size),  # 128 -> 128
             nn.GELU(),
-            nn.Linear(128, config.num_channels)  # 128 -> 64
+            nn.Linear(config.hidden_size, config.num_channels)  # 128 -> 64
         )
         
         # Initialize weights
@@ -41,24 +40,14 @@ class EEGDenoisingModel(PreTrainedModel):
 
     def forward(self, transformer_inputs):
         # transformer_inputs: [batch, seq_len, 128]
-        if transformer_inputs.shape[2] != 128:
-            raise ValueError(f"Expected last dim 128, got {transformer_inputs.shape}")
+        # Do NOT permute or transpose here!
         projected_inputs = self.input_projection(transformer_inputs)
         transformer_outputs = self.transformer(
             inputs_embeds=projected_inputs,
             return_dict=True
         )
         sequence_output = transformer_outputs.last_hidden_state
-        # Ensure always 3D: [batch, seq_len, 128]
-        if sequence_output.dim() == 2:
-            sequence_output = sequence_output.unsqueeze(0)
-        # Decoder expects [batch*seq_len, 128]
-        batch, seq_len, feat = sequence_output.shape
-        x = sequence_output.contiguous().view(-1, feat)
-        x = self.decoder[0](x)
-        x = self.decoder[1](x)
-        x = self.decoder[2](x)
-        denoised_eeg = x.view(batch, seq_len, self.config.num_channels)
+        denoised_eeg = self.decoder(sequence_output)
         return denoised_eeg
 
 class SpectralAttentionLayer(nn.Module):
