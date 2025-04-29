@@ -29,11 +29,12 @@ class TUARDataset:
             raw = mne.io.read_raw_edf(file_path, preload=True)
             eeg_data, _ = raw[:, :]  # Extract data and ignore times
 
-            # Truncate or pad data to fixed_length
-            if eeg_data.shape[1] > self.fixed_length:
-                eeg_data = eeg_data[:, :self.fixed_length]
-            elif eeg_data.shape[1] < self.fixed_length:
-                padding = self.fixed_length - eeg_data.shape[1]
+            # Truncate or pad data to fixed_length (should be 128 for inference)
+            seq_len = self.fixed_length
+            if eeg_data.shape[1] > seq_len:
+                eeg_data = eeg_data[:, :seq_len]
+            elif eeg_data.shape[1] < seq_len:
+                padding = seq_len - eeg_data.shape[1]
                 eeg_data = np.pad(eeg_data, ((0, 0), (0, padding)), mode="constant")
 
             # Generate past_observed_mask with the same sequence length as eeg_data
@@ -43,14 +44,7 @@ class TUARDataset:
             time_feat = np.linspace(0, 1, eeg_data.shape[1])  # Ensure it matches the sequence length
             time_feat = np.tile(time_feat, (eeg_data.shape[0], 1))  # Repeat for each channel
 
-            # Ensure shapes match
-            assert eeg_data.shape == past_observed_mask.shape == time_feat.shape, (
-                f"Shape mismatch: eeg_data shape {eeg_data.shape}, "
-                f"past_observed_mask shape {past_observed_mask.shape}, "
-                f"time_feat shape {time_feat.shape}"
-            )
-
-            # Return tensors
+            # Return tensors with shape [channels, seq_len]
             return (
                 torch.tensor(eeg_data, dtype=torch.float32),
                 torch.tensor(time_feat, dtype=torch.float32),
